@@ -15,6 +15,7 @@ from .util.strings import get_filename, unescape_html
 
 dry_run = False
 force = False
+use_suffix = True
 player = None
 extractor_proxy = None
 cookies_txt = None
@@ -283,8 +284,10 @@ def url_save(url, filepath, bar, refer = None, is_part = False, faker = False):
                 print('Overwriting %s' % tr(os.path.basename(filepath)), '...')
     elif not os.path.exists(os.path.dirname(filepath)):
         os.mkdir(os.path.dirname(filepath))
-
-    temp_filepath = filepath + '.download'
+    if use_suffix:
+        temp_filepath = filepath + '.download'
+    else:
+        temp_filepath = filepath
     received = 0
     if not force:
         open_mode = 'ab'
@@ -336,9 +339,10 @@ def url_save(url, filepath, bar, refer = None, is_part = False, faker = False):
 
     assert received == os.path.getsize(temp_filepath), '%s == %s == %s' % (received, os.path.getsize(temp_filepath), temp_filepath)
 
-    if os.access(filepath, os.W_OK):
-        os.remove(filepath) # on Windows rename could fail if destination filepath exists
-    os.rename(temp_filepath, filepath)
+    if use_suffix:
+        if os.access(filepath, os.W_OK):
+            os.remove(filepath) # on Windows rename could fail if destination filepath exists
+        os.rename(temp_filepath, filepath)
 
 def url_save_chunked(url, filepath, bar, refer = None, is_part = False, faker = False):
     if os.path.exists(filepath):
@@ -359,7 +363,10 @@ def url_save_chunked(url, filepath, bar, refer = None, is_part = False, faker = 
     elif not os.path.exists(os.path.dirname(filepath)):
         os.mkdir(os.path.dirname(filepath))
 
-    temp_filepath = filepath + '.download'
+    if use_suffix:
+        temp_filepath = filepath + '.download'
+    else:
+        temp_filepath = filepath
     received = 0
     if not force:
         open_mode = 'ab'
@@ -394,9 +401,10 @@ def url_save_chunked(url, filepath, bar, refer = None, is_part = False, faker = 
 
     assert received == os.path.getsize(temp_filepath), '%s == %s == %s' % (received, os.path.getsize(temp_filepath))
 
-    if os.access(filepath, os.W_OK):
-        os.remove(filepath) # on Windows rename could fail if destination filepath exists
-    os.rename(temp_filepath, filepath)
+    if use_suffix:
+        if os.access(filepath, os.W_OK):
+            os.remove(filepath) # on Windows rename could fail if destination filepath exists
+        os.rename(temp_filepath, filepath)
 
 class SimpleProgressBar:
     def __init__(self, total_size, total_pieces = 1):
@@ -810,6 +818,7 @@ def script_main(script_name, download, download_playlist = None):
         short_opts = 'l' + short_opts
         opts = ['playlist'] + opts
 
+    opts.append('no-suffix')
     try:
         opts, args = getopt.getopt(sys.argv[1:], short_opts, opts)
     except getopt.GetoptError as err:
@@ -818,6 +827,7 @@ def script_main(script_name, download, download_playlist = None):
         sys.exit(2)
 
     global force
+    global use_suffix
     global dry_run
     global player
     global extractor_proxy
@@ -855,6 +865,8 @@ def script_main(script_name, download, download_playlist = None):
             playlist = True
         elif o in ('-n', '--no-merge'):
             merge = False
+        elif o in ('--no-suffix',):
+            use_suffix = False
         elif o in ('--no-proxy',):
             proxy = ''
         elif o in ('--debug',):
