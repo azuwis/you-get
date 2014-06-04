@@ -82,7 +82,7 @@ def match1(text, *patterns):
 def launch_player(player, urls):
     import subprocess
     import shlex
-    subprocess.call(shlex.split(player) + list(urls))
+    subprocess.Popen(shlex.split(player) + list(urls))
 
 def parse_query_param(url, param):
     """Parses the query string of a URL and returns the value of a parameter.
@@ -265,9 +265,13 @@ def url_locations(urls, faker = False):
     return locations
 
 def url_save(url, filepath, bar, refer = None, is_part = False, faker = False):
+    global playing
     file_size = url_size(url, faker = faker)
 
     if os.path.exists(filepath):
+        if (not playing) and player and (local_play == True):
+            playing = True
+            launch_player(player, local_play_files)
         if not force and file_size == os.path.getsize(filepath):
             if not is_part:
                 if bar:
@@ -334,6 +338,9 @@ def url_save(url, filepath, bar, refer = None, is_part = False, faker = False):
                         response = request.urlopen(request.Request(url, headers = headers), None)
                 output.write(buffer)
                 received += len(buffer)
+                if (not playing) and player and (local_play == True) and (received > 5242880):
+                    playing = True
+                    launch_player(player, local_play_files)
                 if bar:
                     bar.update_received(len(buffer))
 
@@ -482,12 +489,13 @@ class DummyProgressBar:
         pass
 
 def download_urls(urls, title, ext, total_size, output_dir='.', refer=None, merge=True, faker=False):
+    global local_play_files
     assert urls
     if dry_run:
         print('Real URLs:\n%s\n' % urls)
         return
 
-    if player:
+    if player and not local_play:
         launch_player(player, urls)
         return
 
@@ -516,9 +524,15 @@ def download_urls(urls, title, ext, total_size, output_dir='.', refer=None, merg
     if len(urls) == 1:
         url = urls[0]
         print('Downloading %s ...' % tr(filename))
+        local_play_files.append(filepath)
         url_save(url, filepath, bar, refer = refer, faker = faker)
         bar.done()
     else:
+        if player and local_play:
+            for i, url in enumerate(urls):
+                filename = '%s[%02d].%s' % (title, i, ext)
+                filepath = os.path.join(output_dir, filename)
+                local_play_files.append(filepath)
         parts = []
         print('Downloading %s.%s ...' % (tr(title), ext))
         for i, url in enumerate(urls):
@@ -819,6 +833,7 @@ def script_main(script_name, download, download_playlist = None):
         opts = ['playlist'] + opts
 
     opts.append('no-suffix')
+    opts.append('local-play')
     try:
         opts, args = getopt.getopt(sys.argv[1:], short_opts, opts)
     except getopt.GetoptError as err:
@@ -826,6 +841,9 @@ def script_main(script_name, download, download_playlist = None):
         log.e("try 'you-get --help' for more options")
         sys.exit(2)
 
+    global local_play
+    global local_play_files
+    global playing
     global force
     global use_suffix
     global dry_run
@@ -877,6 +895,12 @@ def script_main(script_name, download, download_playlist = None):
             output_dir = a
         elif o in ('-p', '--player'):
             player = a
+        elif o in ('--local-play'):
+            local_play = True
+            use_suffix = False
+            merge = False
+            playing = False
+            local_play_files = []
         elif o in ('-x', '--http-proxy'):
             proxy = a
         elif o in ('-y', '--extractor-proxy'):
